@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>NAAC Institutional Report</title>
+    <style>
+        body { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; margin: 40px; color: #333; }
+        .header { text-align: center; border-bottom: 2px solid #2c3e50; padding-bottom: 20px; margin-bottom: 30px; }
+        .header h1 { color: #2c3e50; margin: 0; }
+        .header p { color: #7f8c8d; font-size: 14px; margin-top: 5px; }
+        .section { margin-bottom: 25px; }
+        .section-title { background-color: #f7f9fa; padding: 10px; font-weight: bold; border-left: 4px solid #3498db; }
+        .data-row { display: flex; border-bottom: 1px solid #ecf0f1; padding: 12px 0; }
+        .data-label { flex: 1; font-weight: bold; color: #555; }
+        .data-value { flex: 2; color: #222; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>NAAC Institutional Report</h1>
+        <p>National Assessment and Accreditation Council</p>
+        <p>Generated on: <%= new Date().toLocaleDateString() %></p>
+    </div>
+
+    <div class="section">
+        <div class="section-title">Institutional Information</div>
+        
+        <% Object.entries(data).forEach(function([key, value]) { %>
+            <div class="data-row">
+                <div class="data-label"><%= key %></div>
+                <div class="data-value"><%= value || "N/A" %></div>
+            </div>
+        <% }); %>
+
+    </div>
+</body>
+</html>

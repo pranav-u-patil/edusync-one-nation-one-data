@@ -1,0 +1,252 @@
+body {
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  margin: 0;
+  padding: 0;
+  background-color: #eef2f5;
+  color: #333;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 100vh;
+}
+
+.app-wrapper {
+  width: 100%;
+  max-width: 750px; /* Slightly wider */
+  padding: 20px;
+}
+
+.header {
+  text-align: center;
+  margin-bottom: 24px;
+}
+
+.header h1 {
+  color: #2c3e50;
+  margin: 0;
+  font-size: 26px; /* Increased */
+}
+
+.header p {
+  color: #7f8c8d;
+  margin: 6px 0 0 0;
+  font-size: 15px; /* Increased */
+}
+
+.card {
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  padding: 28px; /* Increased */
+}
+
+/* Stepper Fixes: Spaced properly to avoid cramming */
+.stepper {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+  border-bottom: 1px solid #ecf0f1;
+  padding-bottom: 16px;
+}
+
+.step {
+  font-size: 13px; /* Increased */
+  color: #bdc3c7;
+  font-weight: 700;
+  text-transform: uppercase;
+  text-align: center;
+  flex: 1; 
+}
+
+.step.active {
+  color: #3498db;
+}
+
+/* Form typography */
+.form-group p {
+  margin: 0 0 16px 0;
+  font-size: 15px; /* Increased */
+  color: #555;
+  line-height: 1.5;
+}
+
+.input-row {
+  display: flex;
+  align-items: center;
+  margin-bottom: 14px;
+  width: 100%;
+}
+
+.action-row {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  margin-top: 16px;
+}
+
+/* Styling native elements */
+select {
+  flex: 1;
+  padding: 10px 14px; /* Increased */
+  border: 1px solid #bdc3c7;
+  border-radius: 4px;
+  font-size: 15px; /* Increased */
+  background: #fafafa;
+  outline: none;
+}
+select:focus {
+  border-color: #3498db;
+}
+
+/* Custom Styled File Input */
+.file-upload-wrapper {
+  width: 100%;
+}
+
+.file-input {
+  display: block;
+  width: 100%;
+  padding: 10px 12px; /* Increased */
+  font-size: 15px; /* Increased */
+  color: #555;
+  background-color: #fafafa;
+  border: 1px dashed #bdc3c7;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.file-input::file-selector-button {
+  background: #ecf0f1;
+  border: 1px solid #bdc3c7;
+  padding: 6px 14px; /* Increased */
+  border-radius: 4px;
+  color: #2c3e50;
+  font-weight: 600;
+  cursor: pointer;
+  margin-right: 14px;
+  font-size: 14px; /* Increased */
+}
+
+.file-input::file-selector-button:hover {
+  background: #e2e6e8;
+}
+
+/* Buttons */
+.btn {
+  padding: 10px 20px; /* Increased */
+  background-color: #3498db;
+  color: white;
+  border: 1px solid #3498db;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 15px; /* Increased */
+  font-weight: 600;
+  transition: background 0.2s, border 0.2s;
+  white-space: nowrap; 
+}
+
+.btn:hover { 
+  background-color: #2980b9; 
+  border-color: #2980b9; 
+}
+
+.btn-secondary { 
+  background-color: #95a5a6; 
+  border-color: #95a5a6; 
+}
+.btn-secondary:hover { 
+  background-color: #7f8c8d; 
+  border-color: #7f8c8d; 
+}
+
+.btn-outline {
+  background-color: transparent;
+  color: #3498db;
+  border: 1px solid #3498db;
+}
+.btn-outline:hover {
+  background-color: #f1f8ff;
+}
+
+.btn-success { 
+  background-color: #2ecc71; 
+  border-color: #2ecc71; 
+}
+.btn-success:hover { 
+  background-color: #27ae60; 
+  border-color: #27ae60; 
+}
+
+/* Messages */
+.message, .error-message {
+  padding: 12px; /* Increased */
+  border-radius: 4px;
+  font-size: 15px; /* Increased */
+  margin-bottom: 16px;
+  text-align: center;
+}
+.message { background-color: #d1fae5; color: #065f46; }
+.error-message { background-color: #fee2e2; color: #991b1b; }
+
+/* Wizard List (Auto-fill mappings) */
+.wizard-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px; /* Increased */
+}
+
+.question-row {
+  display: flex;
+  align-items: center;
+  padding: 12px 14px; /* Increased */
+  border: 1px solid #dfe6e9;
+  border-radius: 6px;
+}
+
+.question-row.filled {
+  background-color: #f6fff8;
+  border-color: #a8e6cf;
+}
+.question-row.missing {
+  background-color: #fffafaf5;
+  border-color: #ffcccb;
+}
+
+.question-label {
+  flex: 0 0 40%;
+  font-size: 14px; /* Increased */
+  font-weight: 600;
+  color: #2d3436;
+  padding-right: 12px;
+}
+
+.question-input {
+  flex: 1;
+  padding: 8px 12px; /* Increased */
+  border: 1px solid #bdc3c7;
+  border-radius: 4px;
+  font-size: 14px; /* Increased */
+}
+.question-input:focus { outline: none; border-color: #3498db; }
+
+.status-text {
+  display: block;
+  font-size: 12px; /* Increased */
+  margin-top: 4px;
+  font-weight: normal;
+}
+.text-success { color: #27ae60; }
+.text-danger { color: #e74c3c; }
+
+/* Generated Links */
+.download-link {
+  display: inline-block;
+  margin-top: 20px;
+  font-weight: 600;
+  color: #3498db;
+  text-decoration: none;
+  font-size: 16px; /* Increased */
+}
+
+.download-link:hover { text-decoration: underline; }

@@ -7,6 +7,10 @@ const {
   processPDF,
   learnMappings,
   healthCheck,
+  generatePDF,
+  generateFromPdf,
+  getTemplateForm,
+  deactivateQuestion,
 } = require("../controllers/formController");
 
 const router = express.Router();
@@ -60,5 +64,9 @@ router.get("/health", healthCheck);
 router.post("/upload-csv", csvUpload.single("file"), uploadCSV);
 router.post("/process-pdf", pdfUpload.single("file"), processPDF);
 router.post("/learn", learnMappings);
+router.post("/deactivate", deactivateQuestion);
+router.post("/generate", generatePDF);
+router.post("/generate-from-pdf", pdfUpload.single("file"), generateFromPdf);
+router.get("/template/:type", getTemplateForm);
 
 module.exports = router;

@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>UGC Institutional Report</title>
+    <style>
+        body { font-family: 'Georgia', serif; margin: 40px; color: #111; }
+        .header { text-align: center; border-bottom: 3px double #8e44ad; padding-bottom: 20px; margin-bottom: 30px; }
+        .header h1 { color: #8e44ad; margin: 0; text-transform: uppercase; letter-spacing: 1px; }
+        .header p { color: #555; font-size: 14px; margin-top: 5px; font-style: italic; }
+        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+        th, td { border: 1px solid #ccc; padding: 12px; text-align: left; }
+        th { background-color: #f4f6f7; font-weight: bold; width: 40%; color: #333; }
+        td { color: #222; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>UGC Institutional Dashboard Data</h1>
+        <p>University Grants Commission</p>
+        <p>Report Date: <%= new Date().toLocaleDateString() %></p>
+    </div>
+
+    <table>
+        <tbody>
+            <% Object.entries(data).forEach(function([key, value]) { %>
+                <tr>
+                    <th><%= key %></th>
+                    <td><%= value || "Not Provided" %></td>
+                </tr>
+            <% }); %>
+        </tbody>
+    </table>
+</body>
+</html>

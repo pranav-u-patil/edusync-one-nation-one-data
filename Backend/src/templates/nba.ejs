@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>NBA Accreditation Form</title>
+    <style>
+        body { font-family: 'Arial', sans-serif; margin: 40px; color: #2c3e50; }
+        .header { text-align: left; border-bottom: 2px solid #e74c3c; padding-bottom: 15px; margin-bottom: 30px; display: flex; justify-content: space-between; align-items: flex-end;}
+        .header h1 { color: #e74c3c; margin: 0; font-size: 24px;}
+        .header p { color: #7f8c8d; font-size: 12px; margin: 0; }
+        .form-group { margin-bottom: 20px; }
+        .form-label { font-weight: bold; display: block; margin-bottom: 5px; font-size: 14px; color: #34495e; }
+        .form-value { background-color: #fdfefe; border: 1px solid #bdc3c7; padding: 10px; border-radius: 4px; min-height: 20px; color: #000; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div>
+            <h1>NBA Accreditation Data Form</h1>
+            <p>National Board of Accreditation</p>
+        </div>
+        <div>
+            <p>Date: <%= new Date().toLocaleDateString() %></p>
+        </div>
+    </div>
+
+    <div class="content">
+        <% Object.entries(data).forEach(function([key, value]) { %>
+            <div class="form-group">
+                <span class="form-label"><%= key %></span>
+                <div class="form-value"><%= value || "" %></div>
+            </div>
+        <% }); %>
+    </div>
+</body>
+</html>

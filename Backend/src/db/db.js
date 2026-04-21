@@ -22,6 +22,7 @@ const connectDB = async () => {
 			answer TEXT NOT NULL,
 			source ENUM('csv', 'admin', 'ai') NOT NULL DEFAULT 'csv',
 			confidence FLOAT NOT NULL DEFAULT 1,
+			is_active BOOLEAN NOT NULL DEFAULT TRUE,
 			created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 		)
 	`);
@@ -45,7 +46,7 @@ const findExact = async (normalizedQuestion) => {
 	}
 
 	const [rows] = await pool.execute(
-		"SELECT id, original_question, normalized_question, answer, source, confidence, created_at FROM qa_data WHERE normalized_question = ? LIMIT 1",
+		"SELECT id, original_question, normalized_question, answer, source, confidence, created_at FROM qa_data WHERE normalized_question = ? AND is_active = 1 LIMIT 1",
 		[normalizedQuestion]
 	);
 
@@ -54,7 +55,7 @@ const findExact = async (normalizedQuestion) => {
 
 const getAllQA = async () => {
 	const [rows] = await pool.execute(
-		"SELECT id, original_question, normalized_question, answer, source, confidence, created_at FROM qa_data ORDER BY id ASC"
+		"SELECT id, original_question, normalized_question, answer, source, confidence, created_at FROM qa_data WHERE is_active = 1 ORDER BY id ASC"
 	);
 
 	return rows;
@@ -73,13 +74,14 @@ const insertQA = async (
 
 	const [result] = await pool.execute(
 		`INSERT INTO qa_data
-			(original_question, normalized_question, answer, source, confidence, created_at)
-		 VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+			(original_question, normalized_question, answer, source, confidence, is_active, created_at)
+		 VALUES (?, ?, ?, ?, ?, 1, CURRENT_TIMESTAMP)
 		 ON DUPLICATE KEY UPDATE
 			original_question = VALUES(original_question),
 			answer = VALUES(answer),
 			source = VALUES(source),
-			confidence = VALUES(confidence)` ,
+			confidence = VALUES(confidence),
+			is_active = 1` ,
 		[question, normalizedQuestion, answer, source, confidence]
 	);
 
@@ -116,6 +118,14 @@ const deletePending = async (normalizedQuestion) => {
 	return result;
 };
 
+const deactivateQA = async (id) => {
+	const [result] = await pool.execute(
+		"UPDATE qa_data SET is_active = 0 WHERE id = ?",
+		[id]
+	);
+	return result;
+};
+
 module.exports = {
 	pool,
 	connectDB,
@@ -124,4 +134,5 @@ module.exports = {
 	insertQA,
 	insertPending,
 	deletePending,
+	deactivateQA,
 };

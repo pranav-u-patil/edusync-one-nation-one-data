@@ -30,6 +30,8 @@ app.get("/", (req, res) => {
       uploadCSV: "POST /api/forms/upload-csv (multipart/form-data with 'file')",
       processPDF: "POST /api/forms/process-pdf (multipart/form-data with 'file')",
       learn: "POST /api/forms/learn",
+      generateFromPdf:
+        "POST /api/forms/generate-from-pdf (multipart/form-data with 'file' and 'data')",
     },
   });
 });
