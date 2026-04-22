@@ -5,7 +5,7 @@ const similarityMatch = (question, dbData = []) => {
     return null;
   }
 
-  const candidates = dbData.map((item) => item.normalized_question);
+  const candidates = dbData.map((item) => item.norm_question);
   const result = stringSimilarity.findBestMatch(question, candidates);
 
   const best = result.bestMatch;
@@ -14,7 +14,7 @@ const similarityMatch = (question, dbData = []) => {
   }
 
   const matchedRecord = dbData.find(
-    (item) => item.normalized_question === best.target
+    (item) => item.norm_question === best.target
   );
 
   if (!matchedRecord) {

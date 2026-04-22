@@ -15,39 +15,38 @@ const connectDB = async () => {
 	const connection = await pool.getConnection();
 
 	await connection.query(`
-		CREATE TABLE IF NOT EXISTS qa_data (
-			id INT AUTO_INCREMENT PRIMARY KEY,
-			original_question TEXT NOT NULL,
-			normalized_question TEXT NOT NULL UNIQUE,
-			answer TEXT NOT NULL,
-			source ENUM('csv', 'admin', 'ai') NOT NULL DEFAULT 'csv',
-			confidence FLOAT NOT NULL DEFAULT 1,
-			is_active BOOLEAN NOT NULL DEFAULT TRUE,
-			created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
-		)
-	`);
-
+	CREATE TABLE IF NOT EXISTS qa_data (
+		id INT AUTO_INCREMENT PRIMARY KEY,
+		original_question TEXT NOT NULL,
+		norm_question VARCHAR(500) NOT NULL UNIQUE,
+		answer TEXT NOT NULL,
+		source ENUM('csv', 'admin', 'ai') NOT NULL DEFAULT 'csv',
+		confidence FLOAT NOT NULL DEFAULT 1,
+		is_active BOOLEAN NOT NULL DEFAULT TRUE,
+		created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+	)
+`);
 	await connection.query(`
-		CREATE TABLE IF NOT EXISTS pending_questions (
-			id INT AUTO_INCREMENT PRIMARY KEY,
-			question TEXT NOT NULL,
-			normalized_question TEXT NOT NULL UNIQUE,
-			created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
-		)
-	`);
+	CREATE TABLE IF NOT EXISTS pending_questions (
+		id INT AUTO_INCREMENT PRIMARY KEY,
+		question TEXT NOT NULL,
+		norm_question VARCHAR(500) NOT NULL UNIQUE,
+		created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+	)
+`);
 
 	connection.release();
 	console.log("MySQL connected");
 };
 
-const findExact = async (normalizedQuestion) => {
-	if (!normalizedQuestion) {
+const findExact = async (normQuestion) => {
+	if (!normQuestion) {
 		return null;
 	}
 
 	const [rows] = await pool.execute(
-		"SELECT id, original_question, normalized_question, answer, source, confidence, created_at FROM qa_data WHERE normalized_question = ? AND is_active = 1 LIMIT 1",
-		[normalizedQuestion]
+		"SELECT id, original_question, norm_question, answer, source, confidence, created_at FROM qa_data WHERE norm_question = ? AND is_active = 1 LIMIT 1",
+		[normQuestion]
 	);
 
 	return rows[0] || null;
@@ -55,7 +54,7 @@ const findExact = async (normalizedQuestion) => {
 
 const getAllQA = async () => {
 	const [rows] = await pool.execute(
-		"SELECT id, original_question, normalized_question, answer, source, confidence, created_at FROM qa_data WHERE is_active = 1 ORDER BY id ASC"
+		"SELECT id, original_question, norm_question, answer, source, confidence, created_at FROM qa_data WHERE is_active = 1 ORDER BY id ASC"
 	);
 
 	return rows;
@@ -63,18 +62,18 @@ const getAllQA = async () => {
 
 const insertQA = async (
 	question,
-	normalizedQuestion,
+	normQuestion,
 	answer,
 	source = "csv",
 	confidence = 1
 ) => {
-	if (!question || !normalizedQuestion || !answer) {
-		throw new Error("question, normalized_question, and answer are required");
+	if (!question || !normQuestion || !answer) {
+		throw new Error("question, norm_question, and answer are required");
 	}
 
 	const [result] = await pool.execute(
 		`INSERT INTO qa_data
-			(original_question, normalized_question, answer, source, confidence, is_active, created_at)
+			(original_question, norm_question, answer, source, confidence, is_active, created_at)
 		 VALUES (?, ?, ?, ?, ?, 1, CURRENT_TIMESTAMP)
 		 ON DUPLICATE KEY UPDATE
 			original_question = VALUES(original_question),
@@ -82,37 +81,37 @@ const insertQA = async (
 			source = VALUES(source),
 			confidence = VALUES(confidence),
 			is_active = 1` ,
-		[question, normalizedQuestion, answer, source, confidence]
+		[question, normQuestion, answer, source, confidence]
 	);
 
 	return result;
 };
 
-const insertPending = async (question, normalizedQuestion) => {
-	if (!question || !normalizedQuestion) {
-		throw new Error("question and normalized_question are required");
+const insertPending = async (question, normQuestion) => {
+	if (!question || !normQuestion) {
+		throw new Error("question and norm_question are required");
 	}
 
 	const [result] = await pool.execute(
 		`INSERT INTO pending_questions
-			(question, normalized_question, created_at)
+			(question, norm_question, created_at)
 		 VALUES (?, ?, CURRENT_TIMESTAMP)
 		 ON DUPLICATE KEY UPDATE
 			question = VALUES(question)` ,
-		[question, normalizedQuestion]
+		[question, normQuestion]
 	);
 
 	return result;
 };
 
-const deletePending = async (normalizedQuestion) => {
-	if (!normalizedQuestion) {
+const deletePending = async (normQuestion) => {
+	if (!normQuestion) {
 		return { affectedRows: 0 };
 	}
 
 	const [result] = await pool.execute(
-		"DELETE FROM pending_questions WHERE normalized_question = ?",
-		[normalizedQuestion]
+		"DELETE FROM pending_questions WHERE norm_question = ?",
+		[normQuestion]
 	);
 
 	return result;

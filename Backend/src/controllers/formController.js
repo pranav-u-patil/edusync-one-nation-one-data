@@ -55,7 +55,7 @@ const findBestAnswerForField = (fieldName, normalizedAnswers) => {
   const normalizedFieldName = normalize(fieldName);
 
   const exact = normalizedAnswers.find(
-    (item) => item.normalized_question === normalizedFieldName
+    (item) => item.norm_question === normalizedFieldName
   );
 
   if (exact) {
@@ -77,7 +77,7 @@ const fillPdfFormFields = (form, dataMap = {}) => {
 
   const normalizedAnswers = rawEntries.map(([question, answer]) => ({
     original_question: question,
-    normalized_question: normalize(question),
+    norm_question: normalize(question),
     answer: String(answer).trim(),
   }));
 
