@@ -5,33 +5,43 @@
 
 const express = require("express");
 const path = require("path");
-const formRoutes = require("./routes/formRoutes");
+const cors = require("cors");
+const apiRoutes = require("./routes/apiRoutes");
 
 const app = express();
 
 // Middleware
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+app.use(cors({ origin: true, credentials: true }));
 
 // Static files
 app.use(express.static(path.join(__dirname, "../public")));
 
 // Routes
-app.use("/api/forms", formRoutes);
+app.use("/api", apiRoutes);
+
+app.get("/api/health", (req, res) => {
+  res.json({
+    status: "ok",
+    service: "EduSync API",
+    version: "2.0.0",
+  });
+});
 
 // Welcome endpoint
 app.get("/", (req, res) => {
   res.json({
-    message: "One Nation One Data API",
-    version: "1.0.0",
-    description: "Auto-fill institutional forms using learned Q-A mappings",
+    message: "EduSync API",
+    version: "2.0.0",
+    description: "Role-based universal data and template management system",
     endpoints: {
-      health: "GET /api/forms/health",
-      uploadCSV: "POST /api/forms/upload-csv (multipart/form-data with 'file')",
-      processPDF: "POST /api/forms/process-pdf (multipart/form-data with 'file')",
-      learn: "POST /api/forms/learn",
-      generateFromPdf:
-        "POST /api/forms/generate-from-pdf (multipart/form-data with 'file' and 'data')",
+      auth: "POST /api/login",
+      upload: "POST /api/upload",
+      mapFields: "POST /api/map-fields",
+      templates: "GET/POST/PUT/DELETE /api/templates",
+      fields: "GET/POST/DELETE /api/fields",
+      report: "POST /api/generate-report",
     },
   });
 });
@@ -50,7 +60,7 @@ app.use((err, req, res, next) => {
   console.error("Error:", err);
 
   // Multer file upload errors
-  if (err.code === "FILE_TOO_LARGE") {
+  if (err.code === "LIMIT_FILE_SIZE" || err.code === "FILE_TOO_LARGE") {
     return res.status(413).json({
       success: false,
       error: "File too large. Maximum size: 10MB",

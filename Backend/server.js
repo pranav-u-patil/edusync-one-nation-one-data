@@ -9,7 +9,7 @@ const startServer = async () => {
         await connectDB();
 
         app.listen(PORT, () => {
-            console.log(`Server started on port ${PORT}`);
+            console.log(`EduSync backend started on port ${PORT}`);
         });
     } catch (error) {
         console.error("Server startup failed:", error.message);

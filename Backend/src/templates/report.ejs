@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title><%= template.name %> Report</title>
+  <style>
+    :root {
+      --ink: #0f172a;
+      --muted: #475569;
+      --line: #dbe4ee;
+      --accent: <%= template.key === 'naac' ? '#0f766e' : template.key === 'nba' ? '#b45309' : '#1d4ed8' %>;
+      --accent-soft: <%= template.key === 'naac' ? '#ccfbf1' : template.key === 'nba' ? '#ffedd5' : '#dbeafe' %>;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      padding: 32px;
+      font-family: Inter, Arial, sans-serif;
+      color: var(--ink);
+      background: #f8fafc;
+    }
+    .page {
+      max-width: 980px;
+      margin: 0 auto;
+      background: white;
+      border: 1px solid var(--line);
+      border-radius: 24px;
+      overflow: hidden;
+      box-shadow: 0 24px 80px rgba(15, 23, 42, 0.08);
+    }
+    .hero {
+      background: linear-gradient(135deg, var(--accent), #0f172a);
+      color: white;
+      padding: 32px;
+    }
+    .hero h1 { margin: 0; font-size: 32px; }
+    .hero p { margin: 8px 0 0; opacity: 0.9; }
+    .body { padding: 28px 32px 36px; }
+    .meta {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+    .meta-card {
+      padding: 16px;
+      border-radius: 18px;
+      background: #f8fafc;
+      border: 1px solid var(--line);
+    }
+    .meta-card span { display: block; font-size: 12px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
+    .meta-card strong { display: block; margin-top: 6px; font-size: 16px; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { padding: 14px 16px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
+    th { width: 34%; color: var(--muted); font-weight: 600; }
+    .status {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 14px;
+      border-radius: 999px;
+      background: var(--accent-soft);
+      color: var(--accent);
+      font-weight: 700;
+      margin-bottom: 20px;
+    }
+    .missing { color: #b91c1c; }
+    .footer { margin-top: 28px; color: var(--muted); font-size: 13px; }
+    @media print {
+      body { padding: 0; }
+      .page { border-radius: 0; box-shadow: none; }
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <div class="hero">
+      <h1><%= template.name %> Report</h1>
+      <p><%= template.description %></p>
+    </div>
+    <div class="body">
+      <div class="status">Auto-filled metadata report</div>
+      <div class="meta">
+        <div class="meta-card"><span>Generated For</span><strong><%= user?.name || 'Institution' %></strong></div>
+        <div class="meta-card"><span>Format</span><strong>HTML / PDF Ready</strong></div>
+        <div class="meta-card"><span>Generated At</span><strong><%= generatedAt %></strong></div>
+      </div>
+
+      <table>
+        <tbody>
+          <% fields.forEach(function(field) { %>
+            <tr>
+              <th><%= field.label %></th>
+              <td class="<%= data[field.key] ? '' : 'missing' %>"><%= data[field.key] || 'Missing' %></td>
+            </tr>
+          <% }) %>
+        </tbody>
+      </table>
+
+      <% if (missingFields.length) { %>
+        <div class="footer">Missing values: <%= missingFields.join(', ') %></div>
+      <% } else { %>
+        <div class="footer">All mapped fields were resolved from the uploaded CSV and template metadata.</div>
+      <% } %>
+    </div>
+  </div>
+</body>
+</html>
