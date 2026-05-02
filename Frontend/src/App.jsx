@@ -15,6 +15,8 @@ import { AdminDashboardPage } from './pages/AdminDashboardPage';
 import { TemplateManagementPage } from './pages/TemplateManagementPage';
 import { FieldBuilderPage } from './pages/FieldBuilderPage';
 import { MappingConfigPage } from './pages/MappingConfigPage';
+import { MetadataSuggestionsPage } from './pages/MetadataSuggestionsPage';
+import { YearComparisonPage } from './pages/YearComparisonPage';
 
 const AppRoutes = () => {
   const { user } = useAuth();
@@ -40,10 +42,12 @@ const AppRoutes = () => {
         <Route path="/autofill" element={<AutofillPage />} />
         <Route path="/report-output" element={<ReportOutputPage />} />
         <Route path="/reports" element={<ReportsPage />} />
+        <Route path="/analytics/comparison" element={<YearComparisonPage />} />
         <Route path="/admin-dashboard" element={<AdminDashboardPage />} />
         <Route path="/admin/templates" element={<TemplateManagementPage />} />
         <Route path="/admin/fields" element={<FieldBuilderPage />} />
         <Route path="/admin/mappings" element={<MappingConfigPage />} />
+        <Route path="/admin/suggestions" element={<MetadataSuggestionsPage />} />
       </Route>
       <Route path="*" element={<Navigate to="/login" replace />} />
     </Routes>

@@ -31,3 +31,10 @@ build/
 # Logs
 logs/
 *.log
+
+# Backend generated files
+Backend/uploads/
+Backend/public/reports/
+
+# Demo data
+demo-data/

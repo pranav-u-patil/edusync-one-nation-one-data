@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
 import client from '../api/client';
+import { useWorkspace } from '../context/WorkspaceContext';
 
 export const FieldBuilderPage = () => {
-  const [fields, setFields] = useState([]);
+  const { fields, setFields } = useWorkspace();
   const [form, setForm] = useState({ label: '', key: '', type: 'text', description: '' });
   const [error, setError] = useState('');
 
@@ -23,7 +24,8 @@ export const FieldBuilderPage = () => {
     try {
       await client.post('/fields', form);
       setForm({ label: '', key: '', type: 'text', description: '' });
-      loadFields();
+      // Refresh shared workspace fields so other admin pages see the new field
+      await loadFields();
     } catch (submitError) {
       setError(submitError.response?.data?.error || submitError.message);
     }
@@ -31,7 +33,8 @@ export const FieldBuilderPage = () => {
 
   const removeField = async (id) => {
     await client.delete(`/fields/${id}`);
-    loadFields();
+    // Refresh shared workspace fields after deletion
+    await loadFields();
   };
 
   return (

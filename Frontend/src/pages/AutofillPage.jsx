@@ -5,14 +5,51 @@ import { useWorkspace } from '../context/WorkspaceContext';
 
 export const AutofillPage = () => {
   const navigate = useNavigate();
-  const { session, selectedTemplate, mappings, setGeneratedReport } = useWorkspace();
+  const { session, selectedTemplate, mappings, setMappings, setGeneratedReport } = useWorkspace();
   const [fieldValues, setFieldValues] = useState({});
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [rowIndex, setRowIndex] = useState(0);
-  const [format, setFormat] = useState('html');
+  const [format, setFormat] = useState('pdf');
 
   const row = session?.rows?.[rowIndex] || session?.rows?.[0] || {};
+
+  // Detect vertical format
+  const isVertical = useMemo(() => {
+    if (session?.format === 'vertical') return true;
+    const headers = session?.headers || [];
+    if (headers.length !== 2) return false;
+    const normalized = headers.map((h) => String(h).trim().toLowerCase());
+    return (
+      (normalized.some((h) => h.includes('field')) && normalized.some((h) => h.includes('value'))) ||
+      (normalized.some((h) => h.includes('question')) && normalized.some((h) => h.includes('answer')))
+    );
+  }, [session]);
+
+  const fieldHeader = session?.headers?.[0] || 'Field Name';
+  const valueHeader = session?.headers?.[1] || 'Value';
+
+  useEffect(() => {
+    const loadMappings = async () => {
+      if (!session?.sessionId || !selectedTemplate?.id || mappings.length > 0) {
+        return;
+      }
+
+      try {
+        const { data } = await client.get('/map-fields', {
+          params: {
+            sessionId: session.sessionId,
+            templateId: selectedTemplate.id,
+          },
+        });
+        setMappings(data.mappings || []);
+      } catch (mappingError) {
+        // Silent error; will show as unmapped fields
+      }
+    };
+
+    loadMappings();
+  }, [session?.sessionId, selectedTemplate?.id, mappings.length, setMappings]);
 
   useEffect(() => {
     if (!selectedTemplate || !session) {
@@ -23,10 +60,19 @@ export const AutofillPage = () => {
     for (const field of selectedTemplate.fields || []) {
       const mapping = mappings.find((item) => item.systemField === field.key);
       const csvField = mapping?.csvField;
-      nextValues[field.key] = row[csvField] ?? row[field.key] ?? row[field.label] ?? '';
+      
+      let value = '';
+      if (isVertical) {
+        const match = (session.rows || []).find((r) => String(r[fieldHeader] ?? '').trim() === String(csvField).trim());
+        value = match ? match[valueHeader] : '';
+      } else {
+        value = row[csvField] ?? row[field.key] ?? row[field.label] ?? '';
+      }
+      
+      nextValues[field.key] = value;
     }
     setFieldValues(nextValues);
-  }, [selectedTemplate, session, mappings, rowIndex]);
+  }, [selectedTemplate, session, mappings, rowIndex, isVertical, fieldHeader, valueHeader, row]);
 
   const resolvedFields = useMemo(() => selectedTemplate?.fields || [], [selectedTemplate]);
 

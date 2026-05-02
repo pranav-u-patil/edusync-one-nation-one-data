@@ -3,10 +3,13 @@ import { useNavigate } from 'react-router-dom';
 import client from '../api/client';
 import { useWorkspace } from '../context/WorkspaceContext';
 
+const academicYearOptions = ['2022-23', '2023-24', '2024-25', '2025-26'];
+
 export const UploadCsvPage = () => {
   const navigate = useNavigate();
   const { setSession } = useWorkspace();
   const [file, setFile] = useState(null);
+  const [academicYear, setAcademicYear] = useState('2024-25');
   const [previewRows, setPreviewRows] = useState([]);
   const [headers, setHeaders] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -26,10 +29,11 @@ export const UploadCsvPage = () => {
     try {
       const formData = new FormData();
       formData.append('file', file);
+      formData.append('academicYear', academicYear);
       const { data } = await client.post('/upload', formData, { headers: { 'Content-Type': 'multipart/form-data' } });
       setSession(data);
       setHeaders(data.headers || []);
-      setPreviewRows((data.rows || []).slice(0, 5));
+      setPreviewRows(data.rows || []);
       setMessage('CSV parsed successfully. Proceed to mapping.');
     } catch (uploadError) {
       setError(uploadError.response?.data?.error || uploadError.message);
@@ -63,6 +67,18 @@ export const UploadCsvPage = () => {
           <div className="rounded-[1.5rem] border border-cyan-200 bg-white p-5">
             <div className="text-lg font-bold text-slate-950">Drop or choose CSV</div>
             <p className="mt-2 text-sm text-slate-600">Accepted format: comma-separated values with headings in the first row.</p>
+            <label className="mt-4 block text-sm font-semibold text-slate-700">
+              Academic year
+              <select
+                value={academicYear}
+                onChange={(event) => setAcademicYear(event.target.value)}
+                className="mt-2 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3"
+              >
+                {academicYearOptions.map((year) => (
+                  <option key={year} value={year}>{year}</option>
+                ))}
+              </select>
+            </label>
             <input
               type="file"
               accept=".csv"
@@ -87,31 +103,54 @@ export const UploadCsvPage = () => {
               <div className="text-xs uppercase tracking-[0.28em] text-slate-500">Preview</div>
               <h2 className="mt-1 text-2xl font-black text-slate-950">Uploaded rows</h2>
             </div>
-            <div className="rounded-full bg-slate-100 px-4 py-2 text-sm font-semibold text-slate-700">
-              {headers.length} headers
+            <div className="flex gap-2">
+              <div className="rounded-full bg-slate-100 px-4 py-2 text-sm font-semibold text-slate-700">
+                {headers.length} columns
+              </div>
+              <div className="rounded-full bg-slate-100 px-4 py-2 text-sm font-semibold text-slate-700">
+                {previewRows.length} rows
+              </div>
             </div>
           </div>
 
-          <div className="mt-5 overflow-x-auto rounded-2xl border border-slate-200">
-            <table className="min-w-full text-left text-sm">
-              <thead className="bg-slate-50 text-slate-600">
-                <tr>
-                  {headers.map((header) => (
-                    <th key={header} className="px-4 py-3 font-semibold">{header}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {previewRows.map((row, index) => (
-                  <tr key={index} className="border-t border-slate-200">
+          {headers.length === 0 ? (
+            <div className="mt-5 rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-4 py-8 text-center">
+              <p className="text-sm text-slate-600">Upload a CSV file to see preview</p>
+            </div>
+          ) : (
+            <div className="mt-5 max-h-[500px] overflow-auto rounded-2xl border border-slate-200">
+              <table className="w-full text-left text-sm">
+                <thead className="sticky top-0 bg-slate-50 text-slate-600">
+                  <tr>
+                    <th className="min-w-[50px] border-r border-slate-200 px-4 py-3 font-semibold bg-slate-50">Row</th>
                     {headers.map((header) => (
-                      <td key={header} className="px-4 py-3 text-slate-700">{String(row[header] ?? '')}</td>
+                      <th key={header} className="min-w-[150px] border-r border-slate-200 px-4 py-3 font-semibold bg-slate-50 whitespace-nowrap">{header}</th>
                     ))}
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody>
+                  {previewRows.length === 0 ? (
+                    <tr>
+                      <td colSpan={headers.length + 1} className="px-4 py-6 text-center text-slate-500">
+                        No rows to display
+                      </td>
+                    </tr>
+                  ) : (
+                    previewRows.map((row, index) => (
+                      <tr key={index} className="border-t border-slate-200 hover:bg-slate-50">
+                        <td className="border-r border-slate-200 px-4 py-3 text-slate-500 font-semibold bg-slate-50">{index + 1}</td>
+                        {headers.map((header) => (
+                          <td key={header} className="border-r border-slate-200 px-4 py-3 text-slate-700 break-words">{String(row[header] ?? '—')}</td>
+                        ))}
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          <p className="mt-3 text-xs text-slate-500">Scroll horizontally to see all columns. Scroll vertically to browse all uploaded rows.</p>
         </div>
       </section>
     </div>

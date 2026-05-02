@@ -3,6 +3,32 @@ import { useWorkspace } from '../context/WorkspaceContext';
 export const ReportOutputPage = () => {
   const { generatedReport } = useWorkspace();
 
+  const forceDownload = async (url) => {
+    try {
+      const response = await fetch(url);
+      const blob = await response.blob();
+      const objectUrl = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      const filename = url.split('/').pop() || 'report';
+      
+      link.href = objectUrl;
+      link.download = filename;
+      
+      // Specifically set type for PDFs to help some browsers
+      if (filename.endsWith('.pdf')) {
+        const pdfBlob = new Blob([blob], { type: 'application/pdf' });
+        link.href = window.URL.createObjectURL(pdfBlob);
+      }
+      
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(objectUrl);
+    } catch (error) {
+      console.error('Download failed:', error);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <section className="rounded-[2rem] bg-white p-8 shadow-soft">
@@ -19,9 +45,18 @@ export const ReportOutputPage = () => {
             <div className="text-sm font-semibold uppercase tracking-[0.28em] text-slate-500">Download</div>
             <h2 className="mt-2 text-2xl font-black text-slate-950">{generatedReport.report?.templateName}</h2>
             <p className="mt-3 text-sm leading-7 text-slate-600">A persisted report record was saved in MongoDB.</p>
-            <a href={generatedReport.downloadUrl} target="_blank" rel="noreferrer" className="mt-6 inline-flex rounded-2xl bg-cyan-500 px-5 py-3 font-bold text-slate-950 transition hover:bg-cyan-400">
-              Download file
-            </a>
+            <div className="mt-6 flex flex-wrap gap-3">
+              <a href={generatedReport.downloadUrl} target="_blank" rel="noreferrer" className="inline-flex rounded-2xl border border-slate-200 bg-white px-5 py-3 font-semibold text-slate-800 transition hover:bg-slate-50">
+                Open preview
+              </a>
+              <button
+                type="button"
+                onClick={() => forceDownload(generatedReport.downloadUrl)}
+                className="inline-flex rounded-2xl bg-cyan-500 px-5 py-3 font-bold text-slate-950 transition hover:bg-cyan-400"
+              >
+                Download file
+              </button>
+            </div>
             {generatedReport.missingFields?.length ? (
               <div className="mt-6 rounded-2xl bg-amber-500/10 p-4 text-sm text-amber-900">
                 Missing values: {generatedReport.missingFields.join(', ')}

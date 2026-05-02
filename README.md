@@ -4,32 +4,48 @@ EduSync is a full-stack, role-based reporting platform built with React, Express
 
 ## Stack
 
-- Frontend: React, Vite, React Router, Axios, Tailwind CSS
+- Frontend: React 19, Vite, React Router, Axios, Tailwind CSS
 - Backend: Node.js, Express, EJS, Puppeteer
 - Database: MongoDB with Mongoose
 - CSV parsing: csv-parser
 - Auth: JWT + bcryptjs
+- String Matching: string-similarity
+- Optional AI: Google Generative AI (fallback for field matching)
+
+## Features
+
+- Upload CSV data (wide or vertical format)
+- AI-assisted field mapping (string similarity + optional LLM fallback)
+- Dynamic template selection (NAAC, NBA, UGC)
+- Autofill and manual override of field values
+- HTML/PDF report generation via EJS + Puppeteer
+- Report storage and download
+- Year-over-year metrics comparison
+- Metadata suggestion and admin review
+- Dashboard with session and report tracking
 
 ## Roles
 
 ### User
 
-- Login
-- Upload CSV
-- Preview parsed rows
-- Map CSV headers to system fields
-- Select a template
-- Autofill and override values
+- Login with email and password
+- Upload CSV (demo-data or custom)
+- Preview parsed CSV rows
+- Auto-match and manually map CSV columns to system fields
+- Select report template
+- Autofill template with mapped data and override values as needed
 - Generate HTML or PDF reports
-- Review generated reports
+- Download and view generated reports
+- Compare metrics across academic years
 
 ### Admin
 
 - Separate admin login
-- Create, edit, and delete templates
-- Create and remove metadata fields
-- Configure field attachments for templates
-- Review mapping configuration
+- Create, edit, and delete report templates
+- Create and manage metadata fields
+- Configure which fields attach to which templates
+- Review and approve AI-generated metadata suggestions
+- Manage system configuration
 
 ## Default Demo Accounts
 
@@ -44,20 +60,67 @@ Backend/
   src/
     app.js
     controllers/
+      apiController.js        # Core API logic (upload, map, generate)
+      formController.js       # Form submission handling
     db/
+      db.js                   # MongoDB schemas and models
     middleware/
+      authMiddleware.js       # JWT auth middleware
     routes/
+      apiRoutes.js            # All API routes
+      formRoutes.js           # Form routes
     templates/
+      naac.ejs                # NAAC report template
+      nba.ejs                 # NBA report template
+      report.ejs              # Generic report template
+      ugc.ejs                 # UGC report template
     utils/
+      extractText.js          # PDF text extraction
+      parseCSV.js             # CSV parsing utilities
+      parseUploadCsv.js       # CSV upload processing
+      similarityMatch.js      # String similarity matching
+      normalize.js            # Data normalization
+      fieldSynonyms.js        # Field synonym mapping
+      reportRenderer.js       # HTML/PDF rendering
+      extraFieldHandler.js    # Handle extra/unmapped fields
+      aiFallback.js           # AI-assisted matching (optional)
+  uploads/                    # User uploaded CSV files
+  public/
+    reports/                  # Generated HTML/PDF reports
 
 Frontend/
   src/
     api/
+      client.js               # Axios API client wrapper
     components/
+      ProtectedRoute.jsx      # Auth-protected route component
+      Sidebar.jsx             # Navigation sidebar
     context/
+      AuthContext.jsx         # User authentication state
+      WorkspaceContext.jsx    # Workspace/session state
     layouts/
+      MainLayout.jsx          # Main page layout
     pages/
+      LoginPage.jsx
+      AdminDashboardPage.jsx
+      DashboardPage.jsx
+      UploadCsvPage.jsx
+      MappingPage.jsx
+      MappingConfigPage.jsx
+      TemplatesPage.jsx
+      TemplateManagementPage.jsx
+      FieldBuilderPage.jsx
+      MetadataSuggestionsPage.jsx
+      ReportsPage.jsx
+      ReportOutputPage.jsx
+      AutofillPage.jsx
+      YearComparisonPage.jsx
     App.jsx
+    main.jsx
+  index.html
+  package.json
+  vite.config.js
+  tailwind.config.js
 ```
 
 ## Setup
@@ -125,12 +188,12 @@ npm run dev
 - `POST /api/generate-report`
 - `GET /api/reports`
 
-## Report Output
-
-The backend renders reports with EJS and can return either HTML or PDF. Generated files are stored under `Backend/public/reports` and served through the `/reports` route.
-
 ## Notes
 
 - MongoDB collections are created automatically through Mongoose.
 - Default seed data includes admin/user accounts, template metadata, and starter fields.
 - Template rendering, mapping, and DB integration are separated across dedicated backend modules.
+- CSV format is auto-detected (vertical: field-value pairs; wide: multi-column format).
+- String similarity matching is used for auto-field mapping; AI fallback available via Google Generative AI.
+- Reports are generated using EJS templates and converted to PDF via Puppeteer.
+

@@ -4,12 +4,38 @@ import client from '../api/client';
 const WorkspaceContext = createContext(null);
 
 export const WorkspaceProvider = ({ children }) => {
-  const [session, setSession] = useState(null);
+  const [session, setSessionState] = useState(() => {
+    // Restore session from localStorage on mount
+    const stored = localStorage.getItem('edusync_session');
+    return stored ? JSON.parse(stored) : null;
+  });
   const [templates, setTemplates] = useState([]);
   const [fields, setFields] = useState([]);
-  const [selectedTemplate, setSelectedTemplate] = useState(null);
+  const [selectedTemplate, setSelectedTemplateState] = useState(() => {
+    const stored = localStorage.getItem('edusync_selected_template');
+    return stored ? JSON.parse(stored) : null;
+  });
   const [mappings, setMappings] = useState([]);
   const [generatedReport, setGeneratedReport] = useState(null);
+
+  // Persist session to localStorage whenever it changes
+  const setSession = (newSession) => {
+    setSessionState(newSession);
+    if (newSession) {
+      localStorage.setItem('edusync_session', JSON.stringify(newSession));
+    } else {
+      localStorage.removeItem('edusync_session');
+    }
+  };
+
+  const setSelectedTemplate = (template) => {
+    setSelectedTemplateState(template);
+    if (template) {
+      localStorage.setItem('edusync_selected_template', JSON.stringify(template));
+    } else {
+      localStorage.removeItem('edusync_selected_template');
+    }
+  };
 
   useEffect(() => {
     const hydrateWorkspace = async () => {
@@ -23,8 +49,17 @@ export const WorkspaceProvider = ({ children }) => {
           client.get('/fields'),
         ]);
 
-        setTemplates(templatesResponse.data.templates || []);
+        const fetchedTemplates = templatesResponse.data.templates || [];
+        setTemplates(fetchedTemplates);
         setFields(fieldsResponse.data.fields || []);
+
+        // If we have a stored template, try to find it in the fresh list to get latest fields
+        const storedTemplate = localStorage.getItem('edusync_selected_template');
+        if (storedTemplate) {
+          const parsed = JSON.parse(storedTemplate);
+          const fresh = fetchedTemplates.find(t => t.id === parsed.id || t._id === parsed._id);
+          if (fresh) setSelectedTemplateState(fresh);
+        }
       } catch (error) {
         // Hydration is best-effort; protected pages will surface API errors.
       }

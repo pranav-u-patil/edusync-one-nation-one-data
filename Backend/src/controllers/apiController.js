@@ -14,8 +14,12 @@ const {
 	Mapping,
 	UploadSession,
 	Report,
+	YearSummary,
+	MetadataSuggestion,
 	getTemplateWithFields,
 } = require("../db/db");
+const fieldSynonyms = require("../utils/fieldSynonyms");
+const { normalizeCsvFieldToKey, getIgnoredExtraFields, getUnmappedExtraFields } = require("../utils/extraFieldHandler");
 
 const publicReportsDir = path.join(__dirname, "../../public/reports");
 const templateFilePath = path.join(__dirname, "../templates/report.ejs");
@@ -27,6 +31,64 @@ const removeFile = (filePath) => {
 };
 
 const toId = (value) => (value ? String(value) : null);
+
+const getUploadFormat = (session) => {
+	const headers = session?.headers || [];
+	const normalizedHeaders = headers.map((header) => String(header).trim().toLowerCase());
+	return (
+		(session?.format === "vertical" ||
+			(headers.length === 2 &&
+				((normalizedHeaders.some((header) => header.includes("field")) && normalizedHeaders.some((header) => header.includes("value"))) ||
+					(normalizedHeaders.some((header) => header.includes("question")) && normalizedHeaders.some((header) => header.includes("answer"))))))
+			? "vertical"
+			: "wide"
+	);
+};
+
+const getVerticalFieldHeaders = (session) => {
+	const headers = session?.headers || [];
+	if (headers.length < 2) {
+		return { fieldHeader: null, valueHeader: null };
+	}
+
+	return { fieldHeader: headers[0], valueHeader: headers[1] };
+};
+
+const getVerticalFieldEntries = (session) => {
+	if (getUploadFormat(session) !== "vertical") {
+		return [];
+	}
+
+	const { fieldHeader, valueHeader } = getVerticalFieldHeaders(session);
+	if (!fieldHeader || !valueHeader) {
+		return [];
+	}
+
+	return (session.rows || [])
+		.map((row) => ({
+			csvField: String(row[fieldHeader] ?? "").trim(),
+			csvValue: row[valueHeader],
+		}))
+		.filter((entry) => entry.csvField);
+};
+
+const resolveValueFromSessionRow = (session, row, csvFieldName) => {
+	if (!csvFieldName) {
+		return undefined;
+	}
+
+	if (getUploadFormat(session) !== "vertical") {
+		return row?.[csvFieldName];
+	}
+
+	const { fieldHeader, valueHeader } = getVerticalFieldHeaders(session);
+	if (!fieldHeader || !valueHeader) {
+		return undefined;
+	}
+
+	const match = (session.rows || []).find((entry) => String(entry[fieldHeader] ?? "").trim() === String(csvFieldName).trim());
+	return match ? match[valueHeader] : undefined;
+};
 
 const createToken = (user) => {
 	return jwt.sign(
@@ -68,15 +130,61 @@ const getCurrentUser = async (req, res) => {
 
 const getDashboard = async (req, res) => {
 	try {
+		const { academicYear } = req.query;
+		const userId = req.user.id;
+		const role = req.user.role;
+
 		const [templateCount, fieldCount, reportCount, sessionCount] = await Promise.all([
 			Template.countDocuments(),
 			Field.countDocuments(),
-			Report.countDocuments(req.user.role === "admin" ? {} : { userId: req.user.id }),
-			UploadSession.countDocuments(req.user.role === "admin" ? {} : { userId: req.user.id }),
+			Report.countDocuments(role === "admin" ? {} : { userId }),
+			UploadSession.countDocuments(role === "admin" ? {} : { userId }),
 		]);
+
+		// Fetch year summary if academicYear specified
+		let yearSummary = null;
+		if (academicYear) {
+			yearSummary = await YearSummary.findOne({ userId, academicYear }).lean();
+
+			if (!yearSummary) {
+				// Calculate from reports if not cached
+				const reports = await Report.find({
+					userId,
+					academicYear,
+				}).lean();
+
+				const naacReports = reports.filter((r) => r.templateName === "NAAC");
+				const ugcReports = reports.filter((r) => r.templateName === "UGC");
+				const nbaReports = reports.filter((r) => r.templateName === "NBA");
+
+				yearSummary = {
+					userId,
+					academicYear,
+					naac: {
+						totalReports: naacReports.length,
+						completedReports: naacReports.filter((r) => r.reportStatus === "submitted" || r.reportStatus === "archived").length,
+						completionPercentage: naacReports.length > 0 ? Math.round((naacReports.filter((r) => r.reportStatus !== "draft").length / naacReports.length) * 100) : 0,
+						reportStatus: naacReports.length > 0 ? naacReports[0].reportStatus : "draft",
+					},
+					ugc: {
+						totalReports: ugcReports.length,
+						completedReports: ugcReports.filter((r) => r.reportStatus === "submitted" || r.reportStatus === "archived").length,
+						completionPercentage: ugcReports.length > 0 ? Math.round((ugcReports.filter((r) => r.reportStatus !== "draft").length / ugcReports.length) * 100) : 0,
+						reportStatus: ugcReports.length > 0 ? ugcReports[0].reportStatus : "draft",
+					},
+					nba: {
+						totalReports: nbaReports.length,
+						completedReports: nbaReports.filter((r) => r.reportStatus === "submitted" || r.reportStatus === "archived").length,
+						completionPercentage: nbaReports.length > 0 ? Math.round((nbaReports.filter((r) => r.reportStatus !== "draft").length / nbaReports.length) * 100) : 0,
+						reportStatus: nbaReports.length > 0 ? nbaReports[0].reportStatus : "draft",
+					},
+				};
+			}
+		}
 
 		return res.json({
 			stats: { templateCount, fieldCount, reportCount, sessionCount },
+			yearSummary,
 			defaults: {
 				adminLogin: { email: "admin@edusync.local", password: "Admin@123" },
 				userLogin: { email: "user@edusync.local", password: "User@123" },
@@ -95,7 +203,8 @@ const uploadCsv = async (req, res) => {
 			return res.status(400).json({ error: "CSV file is required" });
 		}
 
-		const { headers, rows } = await parseUploadCsv(req.file.path);
+		const { academicYear } = req.body;
+		const { headers, rows, format } = await parseUploadCsv(req.file.path);
 		if (!rows.length) {
 			return res.status(400).json({ error: "CSV file does not contain any rows" });
 		}
@@ -106,6 +215,9 @@ const uploadCsv = async (req, res) => {
 			headers,
 			rows,
 			status: "uploaded",
+			academicYear: academicYear || null,
+			format: format || "wide",
+			extraFieldActions: [],
 		});
 
 		return res.json({
@@ -113,6 +225,8 @@ const uploadCsv = async (req, res) => {
 			filename: session.filename,
 			headers: session.headers,
 			rows: session.rows,
+			academicYear: session.academicYear,
+			format: session.format,
 			message: "CSV uploaded and parsed successfully",
 		});
 	} catch (error) {
@@ -276,16 +390,44 @@ const saveMappings = async (req, res) => {
 
 const suggestMappings = async (headers, fields) => {
 	return headers.map((header) => {
-		const options = fields.map((field) => ({
-			...field,
-			norm_question: normalize(field.label || field.key),
-		}));
-		const match = similarityMatch(normalize(header), options);
+		const normalizedHeader = normalize(header);
+		let match = null;
+		let confidence = 0;
+		let source = "manual";
+
+		// Step 1: Check fieldSynonyms dictionary (highest confidence = 0.99)
+		for (const field of fields) {
+			const synonyms = fieldSynonyms[field.key] || [];
+			const isSynonym = synonyms.some((syn) => normalize(syn) === normalizedHeader);
+
+			if (isSynonym) {
+				match = field;
+				confidence = 0.99; // High confidence for synonym match
+				source = "suggested";
+				break;
+			}
+		}
+
+		// Step 2: If no synonym match, use similarity matching (fallback)
+		if (!match) {
+			const options = fields.map((field) => ({
+				...field,
+				norm_question: normalize(field.label || field.key),
+			}));
+			const similarityResult = similarityMatch(normalizedHeader, options);
+
+			if (similarityResult) {
+				match = similarityResult.record;
+				confidence = similarityResult.score;
+				source = "suggested";
+			}
+		}
+
 		return {
 			csvField: header,
-			systemField: match?.record?.key || "",
-			source: match ? "suggested" : "manual",
-			confidence: match?.score || 0,
+			systemField: match?.key || "",
+			source,
+			confidence,
 		};
 	});
 };
@@ -307,6 +449,9 @@ const mapFields = async (req, res) => {
 			return res.status(404).json({ error: "Template not found" });
 		}
 
+		const uploadFormat = getUploadFormat(session);
+		const sourceFields = uploadFormat === "vertical" ? getVerticalFieldEntries(session).map((entry) => entry.csvField) : session.headers;
+
 		if (Array.isArray(mappings) && mappings.length > 0) {
 			await Mapping.deleteMany({ sessionId, templateId });
 			for (const mapping of mappings) {
@@ -324,7 +469,7 @@ const mapFields = async (req, res) => {
 			}
 		} else {
 			// Mapping happens here: when the user does not provide a mapping, use similarity suggestions.
-			const suggestedMappings = await suggestMappings(session.headers, template.fields);
+			const suggestedMappings = await suggestMappings(sourceFields, template.fields);
 			await Mapping.deleteMany({ sessionId, templateId });
 			for (const mapping of suggestedMappings) {
 				if (!mapping.systemField) {
@@ -385,7 +530,7 @@ const generateReport = async (req, res) => {
 
 		for (const field of template.fields) {
 			const csvFieldName = mappingLookup.get(String(field.key)) || mappingLookup.get(String(field.id)) || "";
-			const rowValue = csvFieldName ? row[csvFieldName] : undefined;
+			const rowValue = csvFieldName ? resolveValueFromSessionRow(session, row, csvFieldName) : undefined;
 			const fallback = row[field.key] ?? row[field.label] ?? "";
 			const resolvedValue = overrides[field.key] ?? rowValue ?? fallback;
 			fieldValues[field.key] = resolvedValue ?? "";
@@ -425,6 +570,8 @@ const generateReport = async (req, res) => {
 			data: fieldValues,
 			htmlPath,
 			pdfPath,
+			academicYear: session.academicYear || null,
+			reportStatus: "draft",
 		});
 
 		await UploadSession.findByIdAndUpdate(sessionId, { status: "reported" });
@@ -437,6 +584,8 @@ const generateReport = async (req, res) => {
 				data: report.data,
 				htmlPath: report.htmlPath,
 				pdfPath: report.pdfPath,
+				academicYear: report.academicYear,
+				reportStatus: report.reportStatus,
 			},
 			html,
 			downloadUrl: pdfPath ? `/reports/${path.basename(pdfPath)}` : `/reports/${path.basename(htmlPath)}`,
@@ -457,12 +606,354 @@ const getReports = async (req, res) => {
 	}
 };
 
+const handleExtraFieldAction = async (req, res) => {
+	try {
+		const { sessionId, templateId, csvField, action, note = "" } = req.body;
+
+		if (!sessionId || !templateId || !csvField || !action) {
+			return res.status(400).json({ error: "sessionId, templateId, csvField, and action are required" });
+		}
+
+		const session = await UploadSession.findById(sessionId);
+		if (!session) {
+			return res.status(404).json({ error: "Upload session not found" });
+		}
+
+		// Remove any existing action for this field
+		session.extraFieldActions = session.extraFieldActions.filter(
+			(a) => !(String(a.templateId) === String(templateId) && a.csvField === csvField)
+		);
+
+		// Add new action
+		session.extraFieldActions.push({
+			templateId,
+			csvField,
+			action,
+			note,
+			updatedBy: req.user.id,
+			updatedAt: new Date(),
+		});
+
+		await session.save();
+
+		// If action is "suggested", create metadata suggestion
+		if (action === "suggested") {
+			const suggestedKey = normalizeCsvFieldToKey(csvField);
+			const suggestedLabel = csvField.replace(/[_-]/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+
+			// Check if suggestion already exists
+			const existing = await MetadataSuggestion.findOne({
+				templateId,
+				csvField,
+				status: { $in: ["pending", "approved"] },
+			});
+
+			if (existing) {
+				existing.submissionCount += 1;
+				await existing.save();
+			} else {
+				await MetadataSuggestion.create({
+					userId: req.user.id,
+					sessionId,
+					templateId,
+					csvField,
+					suggestedKey,
+					suggestedLabel,
+					submissionCount: 1,
+					status: "pending",
+				});
+			}
+		}
+
+		return res.json({ message: "Extra field action recorded", session });
+	} catch (error) {
+		return res.status(500).json({ error: error.message });
+	}
+};
+
+const getMetadataSuggestions = async (req, res) => {
+	try {
+		if (req.user.role !== "admin") {
+			return res.status(403).json({ error: "Only admins can view metadata suggestions" });
+		}
+
+		const { status = "pending", templateId, limit = 20, offset = 0 } = req.query;
+		const filter = {};
+
+		if (status) filter.status = status;
+		if (templateId) filter.templateId = templateId;
+
+		const suggestions = await MetadataSuggestion.find(filter)
+			.sort({ submissionCount: -1, createdAt: -1 })
+			.limit(parseInt(limit))
+			.skip(parseInt(offset))
+			.populate("userId", "name email")
+			.populate("templateId", "name key")
+			.lean();
+
+		const total = await MetadataSuggestion.countDocuments(filter);
+
+		return res.json({
+			suggestions,
+			total,
+			limit: parseInt(limit),
+			offset: parseInt(offset),
+		});
+	} catch (error) {
+		return res.status(500).json({ error: error.message });
+	}
+};
+
+const approveMetadataSuggestion = async (req, res) => {
+	try {
+		if (req.user.role !== "admin") {
+			return res.status(403).json({ error: "Only admins can approve suggestions" });
+		}
+
+		const { suggestionId, approvalAction, note = "" } = req.body;
+
+		if (!suggestionId || !approvalAction) {
+			return res.status(400).json({ error: "suggestionId and approvalAction are required" });
+		}
+
+		const suggestion = await MetadataSuggestion.findById(suggestionId);
+		if (!suggestion) {
+			return res.status(404).json({ error: "Suggestion not found" });
+		}
+
+		if (approvalAction === "approve") {
+			// Create new field in system
+			const newField = await Field.create({
+				label: suggestion.suggestedLabel,
+				key: suggestion.suggestedKey,
+				type: "text",
+				description: `Auto-approved from user suggestion (CSV field: ${suggestion.csvField})`,
+			});
+
+			// Update suggestion
+			suggestion.status = "approved";
+			suggestion.reviewedBy = req.user.id;
+			suggestion.reviewedAt = new Date();
+			suggestion.note = note;
+			await suggestion.save();
+
+			return res.json({
+				message: "Suggestion approved and field created",
+				field: newField,
+				suggestion,
+			});
+		} else if (approvalAction === "reject") {
+			suggestion.status = "rejected";
+			suggestion.reviewedBy = req.user.id;
+			suggestion.reviewedAt = new Date();
+			suggestion.note = note;
+			await suggestion.save();
+
+			return res.json({
+				message: "Suggestion rejected",
+				suggestion,
+			});
+		} else {
+			return res.status(400).json({ error: "approvalAction must be 'approve' or 'reject'" });
+		}
+	} catch (error) {
+		return res.status(500).json({ error: error.message });
+	}
+};
+
+const getUnmappedExtraFieldsForSession = async (req, res) => {
+	try {
+		const { sessionId, templateId } = req.query;
+
+		if (!sessionId || !templateId) {
+			return res.status(400).json({ error: "sessionId and templateId are required" });
+		}
+
+		const session = await UploadSession.findById(sessionId).lean();
+		if (!session) {
+			return res.status(404).json({ error: "Session not found" });
+		}
+
+		const template = await getTemplateWithFields(templateId);
+		if (!template) {
+			return res.status(404).json({ error: "Template not found" });
+		}
+
+		const savedMappings = await Mapping.find({ sessionId, templateId }).lean();
+		const ignoredSet = getIgnoredExtraFields(session, templateId);
+		const unmappedFields = getUnmappedExtraFields(
+			session.headers,
+			savedMappings,
+			template.fields,
+			ignoredSet
+		);
+
+		return res.json({
+			unmappedFields,
+			ignoredFields: Array.from(ignoredSet),
+		});
+	} catch (error) {
+		return res.status(500).json({ error: error.message });
+	}
+};
+
+const getYearComparison = async (req, res) => {
+	try {
+		const { year1, year2, templateId } = req.query;
+		const userId = req.user.id;
+
+		if (!year1 || !year2) {
+			return res.status(400).json({ error: "year1 and year2 are required" });
+		}
+
+		const filter1 = { userId, academicYear: year1 };
+		const filter2 = { userId, academicYear: year2 };
+
+		if (templateId) {
+			filter1.templateId = templateId;
+			filter2.templateId = templateId;
+		}
+
+		const [reports1, reports2, numericFields] = await Promise.all([
+			Report.find(filter1).sort({ createdAt: -1 }).lean(),
+			Report.find(filter2).sort({ createdAt: -1 }).lean(),
+			Field.find({ type: "number" }).select("key").lean(),
+		]);
+
+		const numericKeys = new Set(numericFields.map((field) => field.key));
+
+		const parseNumericValue = (value) => {
+			if (typeof value === "number") {
+				return Number.isFinite(value) ? value : null;
+			}
+
+			if (value === null || value === undefined) {
+				return null;
+			}
+
+			const parsed = Number.parseFloat(String(value).replace(/,/g, "").replace(/%/g, ""));
+			return Number.isFinite(parsed) ? parsed : null;
+		};
+
+		// Build one metric set per year by taking the latest available value per metric key.
+		const buildMetricsFromReports = (reports) => {
+			const metrics = {};
+
+			reports.forEach((report) => {
+				if (!report || !report.data || typeof report.data !== "object") {
+					return;
+				}
+
+				Object.entries(report.data).forEach(([key, rawValue]) => {
+					if (!numericKeys.has(key)) {
+						return;
+					}
+
+					if (Object.prototype.hasOwnProperty.call(metrics, key)) {
+						return;
+					}
+
+					const numericValue = parseNumericValue(rawValue);
+					if (numericValue !== null) {
+						metrics[key] = numericValue;
+					}
+				});
+			});
+
+			return metrics;
+		};
+
+		const metrics1 = buildMetricsFromReports(reports1);
+		const metrics2 = buildMetricsFromReports(reports2);
+
+		// Calculate deltas
+		const comparison = {};
+		const allKeys = new Set([...Object.keys(metrics1), ...Object.keys(metrics2)]);
+
+		allKeys.forEach((key) => {
+			const val1 = metrics1[key] || 0;
+			const val2 = metrics2[key] || 0;
+			const delta = val2 - val1;
+			const percentChange = val1 > 0 ? ((delta / val1) * 100).toFixed(2) : "N/A";
+
+			comparison[key] = {
+				year1: val1,
+				year2: val2,
+				delta,
+				percentChange,
+				trend: delta > 0 ? "up" : delta < 0 ? "down" : "stable",
+			};
+		});
+
+		return res.json({
+			year1,
+			year2,
+			metricsYear1: metrics1,
+			metricsYear2: metrics2,
+			reportsUsed: {
+				year1: reports1.length,
+				year2: reports2.length,
+			},
+			comparison,
+		});
+	} catch (error) {
+		return res.status(500).json({ error: error.message });
+	}
+};
+
+const markReportSubmitted = async (req, res) => {
+	try {
+		const { reportId } = req.params;
+
+		const report = await Report.findByIdAndUpdate(
+			reportId,
+			{
+				reportStatus: "submitted",
+				submittedAt: new Date(),
+			},
+			{ new: true }
+		).lean();
+
+		if (!report) {
+			return res.status(404).json({ error: "Report not found" });
+		}
+
+		return res.json({ message: "Report marked as submitted", report });
+	} catch (error) {
+		return res.status(500).json({ error: error.message });
+	}
+};
+const getSessions = async (req, res) => {
+	try {
+		const role = req.user?.role;
+		const filters = {};
+		if (role !== 'admin') {
+			filters.userId = req.user.id;
+		}
+
+		const sessions = await UploadSession.find(filters).sort({ createdAt: -1 }).limit(50).lean();
+		const result = sessions.map((s) => ({
+			id: String(s._id),
+			filename: s.filename,
+			headers: s.headers,
+			academicYear: s.academicYear,
+			createdAt: s.createdAt,
+			userId: s.userId,
+		}));
+
+		return res.json({ sessions: result });
+	} catch (error) {
+		return res.status(500).json({ error: error.message });
+	}
+};
+
 module.exports = {
 	login,
 	getCurrentUser,
 	uploadCsv,
 	mapFields,
 	getMappings,
+	getSessions,
 	saveMappings,
 	getTemplates,
 	createTemplate,
@@ -474,4 +965,10 @@ module.exports = {
 	generateReport,
 	getReports,
 	getDashboard,
+	handleExtraFieldAction,
+	getMetadataSuggestions,
+	approveMetadataSuggestion,
+	getUnmappedExtraFieldsForSession,
+	getYearComparison,
+	markReportSubmitted,
 };

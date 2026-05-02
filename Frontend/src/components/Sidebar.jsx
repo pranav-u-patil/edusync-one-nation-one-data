@@ -9,6 +9,7 @@ const userLinks = [
   { to: '/autofill', label: 'Autofill' },
   { to: '/report-output', label: 'Report Output' },
   { to: '/reports', label: 'My Reports' },
+  { to: '/analytics/comparison', label: 'Year Comparison' },
 ];
 
 const adminLinks = [
@@ -16,6 +17,7 @@ const adminLinks = [
   { to: '/admin/templates', label: 'Template Management' },
   { to: '/admin/fields', label: 'Field Builder' },
   { to: '/admin/mappings', label: 'Mapping Configuration' },
+  { to: '/admin/suggestions', label: 'Metadata Suggestions' },
   ...userLinks,
 ];
 

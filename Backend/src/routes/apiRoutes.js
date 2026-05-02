@@ -9,6 +9,7 @@ const {
 	mapFields,
 	getMappings,
 	saveMappings,
+	getSessions,
 	getTemplates,
 	createTemplate,
 	updateTemplate,
@@ -19,6 +20,12 @@ const {
 	generateReport,
 	getReports,
 	getDashboard,
+	handleExtraFieldAction,
+	getMetadataSuggestions,
+	approveMetadataSuggestion,
+	getUnmappedExtraFieldsForSession,
+	getYearComparison,
+	markReportSubmitted,
 } = require("../controllers/apiController");
 const { requireAuth, requireRole } = require("../middleware/authMiddleware");
 
@@ -56,6 +63,7 @@ router.post("/upload", requireAuth, csvUpload.single("file"), uploadCsv);
 router.post("/map-fields", requireAuth, mapFields);
 router.get("/map-fields", requireAuth, getMappings);
 router.post("/save-mappings", requireAuth, saveMappings);
+router.get("/sessions", requireAuth, getSessions);
 
 router.get("/templates", requireAuth, getTemplates);
 router.post("/templates", requireAuth, requireRole(["admin"]), createTemplate);
@@ -68,5 +76,15 @@ router.delete("/fields/:id", requireAuth, requireRole(["admin"]), deleteField);
 
 router.post("/generate-report", requireAuth, generateReport);
 router.get("/reports", requireAuth, getReports);
+router.put("/reports/:reportId/submit", requireAuth, markReportSubmitted);
+
+// Sprint 2: Extra Fields & Metadata Management
+router.post("/extra-field-action", requireAuth, handleExtraFieldAction);
+router.get("/unmapped-extra-fields", requireAuth, getUnmappedExtraFieldsForSession);
+router.get("/metadata-suggestions", requireAuth, getMetadataSuggestions);
+router.post("/metadata-suggestions/:suggestionId/review", requireAuth, requireRole(["admin"]), approveMetadataSuggestion);
+
+// Sprint 3: Year Comparison
+router.get("/year-comparison", requireAuth, getYearComparison);
 
 module.exports = router;

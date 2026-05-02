@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import client from '../api/client';
 import { useWorkspace } from '../context/WorkspaceContext';
@@ -7,8 +7,37 @@ export const MappingPage = () => {
   const navigate = useNavigate();
   const { session, templates, setTemplates, fields, setFields, selectedTemplate, setSelectedTemplate, mappings, setMappings } = useWorkspace();
   const [loading, setLoading] = useState(false);
+  const [extraFieldsLoading, setExtraFieldsLoading] = useState(false);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
+  const [unmappedExtraFields, setUnmappedExtraFields] = useState([]);
+  const [ignoredFields, setIgnoredFields] = useState([]);
+  const [extraFieldSelections, setExtraFieldSelections] = useState({});
+  const autoSuggestedWorkspaceRef = useRef(null);
+  const csvHeaders = session?.headers || [];
+  const templateFields = selectedTemplate?.fields || [];
+  
+  // Detect vertical format the same way backend does
+  const isVerticalUpload = useMemo(() => {
+    if (csvHeaders.length !== 2) return false;
+    const normalized = csvHeaders.map(h => String(h).trim().toLowerCase());
+    return (
+      (normalized.some(h => h.includes('field')) && normalized.some(h => h.includes('value'))) ||
+      (normalized.some(h => h.includes('question')) && normalized.some(h => h.includes('answer')))
+    );
+  }, [csvHeaders]);
+  
+  const verticalFieldHeader = csvHeaders[0] || 'Field Name';
+  const verticalValueHeader = csvHeaders[1] || 'Value';
+  const mappingSourceFields = useMemo(() => {
+    if (!isVerticalUpload) {
+      return csvHeaders;
+    }
+
+    return (session?.rows || [])
+      .map((row) => String(row[verticalFieldHeader] ?? '').trim())
+      .filter(Boolean);
+  }, [csvHeaders, isVerticalUpload, session?.rows, verticalFieldHeader]);
 
   useEffect(() => {
     const loadCatalog = async () => {
@@ -33,8 +62,95 @@ export const MappingPage = () => {
     }
   }, [selectedTemplate, setSelectedTemplate, templates]);
 
-  const csvHeaders = session?.headers || [];
-  const templateFields = selectedTemplate?.fields || [];
+  // Load existing mappings when template changes
+  useEffect(() => {
+    const loadExistingMappings = async () => {
+      if (!session?.sessionId || !selectedTemplate?.id) {
+        setMappings([]);
+        autoSuggestedWorkspaceRef.current = null;
+        return;
+      }
+
+      try {
+        const { data } = await client.get('/map-fields', {
+          params: {
+            sessionId: session.sessionId,
+            templateId: selectedTemplate.id,
+          },
+        });
+        const existingMappings = data.mappings || [];
+        setMappings(existingMappings);
+      } catch (error) {
+        // No existing mappings; will need to auto-suggest
+        setMappings([]);
+      }
+    };
+
+    loadExistingMappings();
+  }, [csvHeaders.length, mappingSourceFields.length, selectedTemplate?.id, session?.sessionId, setMappings]);
+
+  useEffect(() => {
+    const autoLoadMappings = async () => {
+      if (!session?.sessionId || !selectedTemplate?.id || csvHeaders.length === 0) {
+        return;
+      }
+
+      if (mappings.length > 0) {
+        return;
+      }
+
+      const workspaceKey = `${session.sessionId}:${selectedTemplate.id}`;
+      if (autoSuggestedWorkspaceRef.current === workspaceKey) {
+        return;
+      }
+
+      autoSuggestedWorkspaceRef.current = workspaceKey;
+      setLoading(true);
+      setError('');
+
+      try {
+        const { data } = await client.post('/map-fields', {
+          sessionId: session.sessionId,
+          templateId: selectedTemplate.id,
+        });
+        setMappings(data.mappings || []);
+      } catch (mappingError) {
+        setError(mappingError.response?.data?.error || mappingError.message);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    autoLoadMappings();
+  }, [csvHeaders.length, mappingSourceFields.length, mappings.length, selectedTemplate?.id, session?.sessionId, setMappings]);
+
+  useEffect(() => {
+    const loadUnmappedExtraFields = async () => {
+      if (!session?.sessionId || !selectedTemplate?.id) {
+        setUnmappedExtraFields([]);
+        setIgnoredFields([]);
+        return;
+      }
+
+      setExtraFieldsLoading(true);
+      try {
+        const { data } = await client.get('/unmapped-extra-fields', {
+          params: {
+            sessionId: session.sessionId,
+            templateId: selectedTemplate.id,
+          },
+        });
+        setUnmappedExtraFields(data.unmappedFields || []);
+        setIgnoredFields(data.ignoredFields || []);
+      } catch (extraFieldError) {
+        setError(extraFieldError.response?.data?.error || extraFieldError.message);
+      } finally {
+        setExtraFieldsLoading(false);
+      }
+    };
+
+    loadUnmappedExtraFields();
+  }, [selectedTemplate?.id, session?.sessionId]);
 
   const fieldChoices = useMemo(
     () => templateFields.map((field) => ({ value: field.key, label: field.label })),
@@ -71,6 +187,57 @@ export const MappingPage = () => {
       next.push({ csvField, systemField, source: 'manual', confidence: 1 });
       return next;
     });
+  };
+
+  const updateExtraFieldSelection = (csvField, systemField) => {
+    setExtraFieldSelections((previous) => ({
+      ...previous,
+      [csvField]: systemField,
+    }));
+  };
+
+  const refreshExtraFields = async () => {
+    if (!session?.sessionId || !selectedTemplate?.id) {
+      return;
+    }
+
+    const { data } = await client.get('/unmapped-extra-fields', {
+      params: {
+        sessionId: session.sessionId,
+        templateId: selectedTemplate.id,
+      },
+    });
+    setUnmappedExtraFields(data.unmappedFields || []);
+    setIgnoredFields(data.ignoredFields || []);
+  };
+
+  const recordExtraFieldAction = async (csvField, action) => {
+    if (!session || !selectedTemplate) {
+      setError('Upload a CSV and select a template first.');
+      return;
+    }
+
+    if (action === 'map_now') {
+      const systemField = extraFieldSelections[csvField];
+      if (!systemField) {
+        setError('Choose a system field before mapping this extra column.');
+        return;
+      }
+      updateMapping(csvField, systemField);
+    }
+
+    try {
+      await client.post('/extra-field-action', {
+        sessionId: session.sessionId,
+        templateId: selectedTemplate.id,
+        csvField,
+        action,
+      });
+      setMessage(action === 'suggested' ? 'Suggestion sent to admin.' : action === 'ignored' ? 'Field ignored for this year.' : 'Field added to the mapping list. Save mappings to persist it.');
+      await refreshExtraFields();
+    } catch (actionError) {
+      setError(actionError.response?.data?.error || actionError.message);
+    }
   };
 
   const saveMappings = async () => {
@@ -135,9 +302,15 @@ export const MappingPage = () => {
           <div className="mt-6 rounded-2xl bg-slate-50 p-4">
             <div className="text-sm font-bold text-slate-950">Session</div>
             <div className="mt-1 text-sm text-slate-600">{session?.filename || 'No CSV uploaded yet'}</div>
+            <div className="mt-1 text-sm text-slate-600">Academic year: {session?.academicYear || 'Not selected'}</div>
             <div className="mt-4 text-sm font-bold text-slate-950">Headers</div>
             <div className="mt-2 flex flex-wrap gap-2">
-              {csvHeaders.map((header) => (
+              {isVerticalUpload ? (
+                <>
+                  <span className="rounded-full bg-cyan-500/10 px-3 py-1 text-xs font-semibold text-cyan-800">{verticalFieldHeader}</span>
+                  <span className="rounded-full bg-cyan-500/10 px-3 py-1 text-xs font-semibold text-cyan-800">{verticalValueHeader}</span>
+                </>
+              ) : csvHeaders.map((header) => (
                 <span key={header} className="rounded-full bg-cyan-500/10 px-3 py-1 text-xs font-semibold text-cyan-800">{header}</span>
               ))}
             </div>
@@ -154,13 +327,21 @@ export const MappingPage = () => {
           </div>
 
           <div className="mt-5 space-y-3">
-            {csvHeaders.map((csvField) => {
+            {mappingSourceFields.map((csvField, index) => {
               const existing = mappings.find((mapping) => mapping.csvField === csvField);
+              const rowValue = isVerticalUpload ? session?.rows?.[index]?.[verticalValueHeader] : null;
               return (
                 <div key={csvField} className="grid gap-3 rounded-2xl border border-slate-200 p-4 lg:grid-cols-[1fr_1fr_auto] lg:items-center">
                   <div>
                     <div className="text-sm font-bold text-slate-950">{csvField}</div>
-                    <div className="text-xs uppercase tracking-[0.2em] text-slate-500">CSV header</div>
+                    {isVerticalUpload ? (
+                      <>
+                        <div className="mt-1 text-xs uppercase tracking-[0.2em] text-slate-500">{verticalFieldHeader}</div>
+                        <div className="mt-1 text-sm text-slate-600">{String(rowValue ?? '—')}</div>
+                      </>
+                    ) : (
+                      <div className="text-xs uppercase tracking-[0.2em] text-slate-500">CSV header</div>
+                    )}
                   </div>
                   <select
                     value={existing?.systemField || ''}
@@ -185,6 +366,70 @@ export const MappingPage = () => {
           >
             {loading ? 'Saving...' : 'Save mapping and continue'}
           </button>
+
+          <div className="mt-8 border-t border-slate-200 pt-6">
+            <div className="flex items-center justify-between gap-4">
+              <div>
+                <div className="text-xs uppercase tracking-[0.28em] text-slate-500">Unmapped extra fields</div>
+                <h3 className="mt-1 text-xl font-black text-slate-950">Keep or classify columns that do not match yet</h3>
+              </div>
+              <div className="rounded-full bg-slate-100 px-4 py-2 text-sm font-semibold text-slate-700">
+                {extraFieldsLoading ? 'Loading...' : `${unmappedExtraFields.length} pending`}
+              </div>
+            </div>
+
+            <div className="mt-5 space-y-3">
+              {unmappedExtraFields.length === 0 ? (
+                <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-5 text-sm text-slate-600">
+                  No extra fields are waiting right now.
+                </div>
+              ) : unmappedExtraFields.map((field) => (
+                <div key={field.csvField} className="rounded-2xl border border-slate-200 p-4">
+                  <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                    <div>
+                      <div className="text-sm font-bold text-slate-950">{field.csvField}</div>
+                      <div className="text-xs uppercase tracking-[0.2em] text-slate-500">Suggested key: {field.suggestedKey}</div>
+                    </div>
+                    <div className="flex flex-col gap-3 lg:min-w-[380px] lg:flex-row lg:items-center">
+                      <select
+                        value={extraFieldSelections[field.csvField] || ''}
+                        onChange={(event) => updateExtraFieldSelection(field.csvField, event.target.value)}
+                        className="w-full rounded-2xl border border-slate-200 px-4 py-3"
+                      >
+                        <option value="">Choose system field</option>
+                        {fieldChoices.map((choice) => (
+                          <option key={choice.value} value={choice.value}>{choice.label}</option>
+                        ))}
+                      </select>
+                      <div className="flex flex-wrap gap-2">
+                        <button
+                          onClick={() => recordExtraFieldAction(field.csvField, 'ignored')}
+                          className="rounded-2xl border border-slate-200 px-4 py-3 text-sm font-semibold text-slate-700"
+                        >
+                          Ignore
+                        </button>
+                        <button
+                          onClick={() => recordExtraFieldAction(field.csvField, 'map_now')}
+                          className="rounded-2xl bg-cyan-500 px-4 py-3 text-sm font-bold text-slate-950"
+                        >
+                          Map now
+                        </button>
+                        <button
+                          onClick={() => recordExtraFieldAction(field.csvField, 'suggested')}
+                          className="rounded-2xl border border-cyan-200 bg-cyan-50 px-4 py-3 text-sm font-semibold text-cyan-800"
+                        >
+                          Suggest
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                  {ignoredFields.includes(field.csvField) ? (
+                    <div className="mt-3 text-xs font-semibold uppercase tracking-[0.2em] text-amber-700">Ignored for this session</div>
+                  ) : null}
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
       </section>
     </div>

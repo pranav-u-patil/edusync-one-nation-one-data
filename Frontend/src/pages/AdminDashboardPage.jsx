@@ -8,6 +8,7 @@ export const AdminDashboardPage = () => {
     { to: '/admin/templates', title: 'Template management', description: 'Create, edit, and delete template metadata.' },
     { to: '/admin/fields', title: 'Field builder', description: 'Add or remove metadata-driven fields.' },
     { to: '/admin/mappings', title: 'Mapping configuration', description: 'Review and refine CSV-to-field mappings.' },
+    { to: '/admin/suggestions', title: 'Metadata suggestions', description: 'Review custom fields suggested by users.' },
     { to: '/reports', title: 'Report archive', description: 'See generated outputs across sessions.' },
   ];
 

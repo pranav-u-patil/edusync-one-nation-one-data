@@ -17,7 +17,18 @@ const parseUploadCsv = (filePath) => {
 				rows.push(normalizedRow);
 			})
 			.on("end", () => {
-				resolve({ headers: Array.from(headerSet), rows });
+				const headers = Array.from(headerSet);
+				const normalizedHeaders = headers.map((header) => String(header).trim().toLowerCase());
+				const looksVertical =
+					headers.length === 2 &&
+					((normalizedHeaders.some((header) => header.includes("field")) && normalizedHeaders.some((header) => header.includes("value"))) ||
+						(normalizedHeaders.some((header) => header.includes("question")) && normalizedHeaders.some((header) => header.includes("answer"))));
+
+				resolve({
+					headers,
+					rows,
+					format: looksVertical ? "vertical" : "wide",
+				});
 			})
 			.on("error", reject);
 	});
